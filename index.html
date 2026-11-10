@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#EA580C">
+<title>OrderHub · تحديد موقع المطعم</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif; background: #F5F6F8; color: #101828; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: linear-gradient(135deg, #FB923C, #EA580C 45%, #9A3412); color: #fff; padding: 22px 20px 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+  .brand span { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.2); display: inline-flex; align-items: center; justify-content: center; }
+  main { flex: 1; padding: 0 16px 24px; margin-top: -44px; }
+  .card { background: #fff; border-radius: 18px; box-shadow: 0 10px 30px -10px rgba(16,24,40,.25); padding: 20px; display: flex; flex-direction: column; gap: 16px; max-width: 480px; margin: 0 auto; }
+  .rest { display: flex; align-items: center; gap: 12px; }
+  .rest img, .rest .ph { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; background: #FFE7D5; color: #9A3412; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; flex: none; }
+  .rest b { font-size: 17px; display: block; }
+  .rest small { color: #5D6679; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: #5D6679; line-height: 1.7; font-size: 15px; }
+  .btn { width: 100%; min-height: 54px; border: 0; border-radius: 14px; font-size: 17px; font-weight: 700; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
+  .btn-primary { background: #EA580C; color: #fff; }
+  .btn-light { background: #F1F3F6; color: #344054; }
+  .btn:disabled { opacity: .6; }
+  .map { position: relative; height: 230px; border-radius: 14px; overflow: hidden; background: #E5E7EB; direction: ltr; border: 1px solid #E7E9EE; }
+  .map .tile { position: absolute; width: 256px; height: 256px; background-size: 256px 256px; }
+  .map .pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -100%); filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+  .map .acc { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(234,88,12,.15); border: 2px solid rgba(234,88,12,.5); }
+  .map .attr { position: absolute; bottom: 3px; right: 5px; font-size: 10px; background: rgba(255,255,255,.85); padding: 1px 5px; border-radius: 4px; color: #5D6679; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 600; }
+  .good { background: #ECFDF3; color: #067647; }
+  .warn { background: #FFFAEB; color: #B54708; }
+  .bad { background: #FEF3F2; color: #B42318; }
+  .center { text-align: center; align-items: center; }
+  .big-ic { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 4px auto; }
+  .spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; animation: s .8s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+  footer { text-align: center; color: #98A2B3; font-size: 12px; padding: 16px; }
+</style>
+</head>
+<body>
+<header><div class="brand"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg></span>OrderHub</div></header>
+<main><div class="card" id="app"><p>جاري التحميل...</p></div></main>
+<footer>الموقع بينبعت مرة وحدة لمطعمك بس، والرابط بينتهي خلال 15 دقيقة.</footer>
+<script>
+(function () {
+  'use strict';
+  var API = 'https://ndpphgupvnnpvedgegrj.supabase.co/functions/v1/pick-location';
+  var app = document.getElementById('app');
+  var token = (new URLSearchParams(location.search).get('t') || '').toLowerCase();
+  var info = null, best = null, watchId = null, timer = null;
+
+  var PIN = '<svg width="40" height="40" viewBox="0 0 24 24" fill="#EA580C" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function rest() {
+    if (!info) return '';
+    var logo = info.logo_url && /^https:\/\//.test(info.logo_url) ? '<img src="' + esc(info.logo_url) + '" alt="">' : '<span class="ph">' + esc((info.restaurant_name || '؟').charAt(0)) + '</span>';
+    return '<div class="rest">' + logo + '<div><b>' + esc(info.restaurant_name) + '</b><small>تحديد موقع المطعم</small></div></div>';
+  }
+  function mapHtml(lat, lng, acc) {
+    var z = 17, n = Math.pow(2, z), r = lat * Math.PI / 180;
+    var x = (lng + 180) / 360 * n, y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+    var fx = Math.floor(x), fy = Math.floor(y), h = '';
+    for (var dx = -2; dx <= 2; dx++) for (var dy = -1; dy <= 1; dy++) {
+      h += '<span class="tile" style="background-image:url(\'https://tile.openstreetmap.org/' + z + '/' + (fx + dx) + '/' + (fy + dy) + '.png\');left:calc(50% + ' + Math.round((fx + dx - x) * 256) + 'px);top:calc(50% + ' + Math.round((fy + dy - y) * 256) + 'px)"></span>';
+    }
+    var mpp = 156543.03392 * Math.cos(r) / n; // متر لكل بكسل
+    var d = Math.min(400, Math.max(16, 2 * (acc || 0) / mpp));
+    return '<div class="map">' + h + (acc ? '<span class="acc" style="width:' + d + 'px;height:' + d + 'px"></span>' : '') + '<span class="pin">' + PIN + '</span><span class="attr">© OpenStreetMap</span></div>';
+  }
+  function accPill(a) {
+    if (a == null) return '';
+    var cls = a <= 25 ? 'good' : a <= 80 ? 'warn' : 'bad';
+    var t = a <= 25 ? 'دقة ممتازة' : a <= 80 ? 'دقة مقبولة' : 'الدقة ضعيفة، اطلع لمكان مفتوح وجرّب كمان';
+    return '<span class="pill ' + cls + '">' + t + ' · <span class="num">±' + Math.round(a) + ' m</span></span>';
+  }
+  function show(html) { app.innerHTML = html; }
+  function fail(title, text) {
+    show(rest() + '<div class="center" style="display:flex;flex-direction:column;gap:10px"><div class="big-ic" style="background:#FEF3F2"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg></div><h1>' + esc(title) + '</h1><p>' + text + '</p></div>');
+  }
+  function start() {
+    show(rest() + '<h1>وقّف بالمطعم وحدد موقعه</h1><p>اضغط الزر وإنت داخل المطعم أو على بابه. الموبايل بيستخدم الـ GPS عشان المندوب يوصل للمكان بالضبط.</p><button class="btn btn-primary" id="go">' + PIN.replace('width="40" height="40"', 'width="22" height="22"').replace('fill="#EA580C"', 'fill="none"') + ' حدد موقعي الآن</button>');
+    document.getElementById('go').onclick = locate;
+  }
+  function stopWatch() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = null; clearTimeout(timer); }
+  function locate() {
+    if (!('geolocation' in navigator)) { fail('الموبايل ما بيدعم تحديد الموقع', 'جرّب من متصفح Chrome أو Safari.'); return; }
+    best = null;
+    show(rest() + '<h1>جاري تحديد موقعك...</h1><p>إذا سألك المتصفح عن الموقع اختار "سماح". خليك واقف بمكانك ثواني.</p><button class="btn btn-primary" disabled><span class="spin"></span> جاري التحديد</button>');
+    watchId = navigator.geolocation.watchPosition(function (pos) {
+      var c = pos.coords;
+      if (!best || c.accuracy < best.acc) best = { lat: c.latitude, lng: c.longitude, acc: c.accuracy };
+      if (best.acc <= 15) { stopWatch(); review(); }
+    }, function (err) {
+      stopWatch();
+      if (best) { review(); return; }
+      if (err.code === 1) fail('ما في إذن للموقع', 'افتح إعدادات المتصفح ← الموقع، واسمح لهالصفحة، وتأكد إن الـ GPS (الموقع) شغّال بالموبايل. بعدين حدّث الصفحة.');
+      else fail('ما قدرنا نحدد موقعك', 'تأكد إن الموقع (GPS) شغّال بالموبايل، واطلع لمكان مفتوح، وحدّث الصفحة.');
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+    timer = setTimeout(function () { if (best) { stopWatch(); review(); } }, 12000);
+  }
+  function review() {
+    show(rest() + '<h1>هاد موقع المطعم؟</h1>' + mapHtml(best.lat, best.lng, best.acc) + '<div>' + accPill(best.acc) + '</div>'
+      + '<p class="num" style="text-align:right">' + best.lat.toFixed(6) + ', ' + best.lng.toFixed(6) + '</p>'
+      + '<button class="btn btn-primary" id="send">إرسال الموقع للمطعم</button><button class="btn btn-light" id="again">إعادة التحديد</button>');
+    document.getElementById('send').onclick = send;
+    document.getElementById('again').onclick = locate;
+  }
+  function send() {
+    var b = document.getElementById('send'); b.disabled = true; b.innerHTML = '<span class="spin"></span> جاري الإرسال';
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, lat: best.lat, lng: best.lng, acc: best.acc }) })
+      .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.s === 200) {
+          show(rest() + '<div class="center" style="display:flex;flex-direction:column;gap:10px"><div class="big-ic" style="background:#ECFDF3"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#067647" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h1>تم إرسال الموقع</h1><p>ارجع للكمبيوتر، الدبوس صار على موقع المطعم. اتأكد منه واضغط "حفظ الموقع".</p></div>');
+        } else if (res.s === 410) fail('انتهت صلاحية الرمز', 'ارجع للكمبيوتر واضغط "حدد من الموبايل" كمان مرة، وصوّر الرمز الجديد.');
+        else if (res.s === 409) fail('الموقع انبعت قبل', 'الرمز هاد استُخدم. إذا بدك تغيّر الموقع اطلب رمز جديد من الكمبيوتر.');
+        else fail('صار خطأ', 'جرّب كمان مرة أو اطلب رمز جديد من الكمبيوتر.');
+      })
+      .catch(function () { b.disabled = false; b.textContent = 'إرسال الموقع للمطعم'; alert('ما في اتصال بالإنترنت. جرّب كمان مرة.'); });
+  }
+
+  if (!/^[0-9a-f]{36}$/.test(token)) { fail('الرابط مش صحيح', 'صوّر الرمز من شاشة الإعدادات بتطبيق OrderHub على الكمبيوتر.'); return; }
+  fetch(API + '?t=' + token).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+    .then(function (res) {
+      if (res.s !== 200) { fail('الرمز مش موجود', 'اطلب رمز جديد من تطبيق OrderHub على الكمبيوتر.'); return; }
+      info = res.j;
+      if (info.done) { fail('الموقع انبعت قبل', 'الرمز هاد استُخدم. اطلب رمز جديد إذا بدك تغيّر الموقع.'); return; }
+      if (info.expired) { fail('انتهت صلاحية الرمز', 'ارجع للكمبيوتر واضغط "حدد من الموبايل" كمان مرة.'); return; }
+      start();
+    })
+    .catch(function () { fail('ما في اتصال بالإنترنت', 'تأكد إن الموبايل متصل بالإنترنت وحدّث الصفحة.'); });
+})();
+</script>
+</body>
+</html>
